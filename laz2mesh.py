@@ -117,7 +117,7 @@ def main():
     # UV 展开与贴图
     ms.apply_filter(
         'compute_texcoord_parametrization_triangle_trivial_per_wedge',
-        textdim=2048
+        textdim=4096
     )
     ms.apply_filter('compute_texcoord_transfer_wedge_to_vertex')
     ms.apply_filter(
