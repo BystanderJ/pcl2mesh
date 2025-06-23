@@ -81,10 +81,19 @@ def main():
             {"type": "readers.las", "filename": in_laz},
             {"type": "filters.crop", "bounds": bounds},
             {"type": "writers.ply", "filename": ply_crop,
-             "dims": "X,Y,Z,Red,Green,Blue",
+             #"dims": "X,Y,Z,red,green,blue",
              "storage_mode": "little endian"}
         ]
     }
+
+
+    #p = pdal.Pipeline(json.dumps(pipeline))
+    #p.execute()
+    #metadata = p.metadata
+    #print('看一下有没有 Red/Green/Blue 维度')
+    #print(metadata)  # 看一下有没有 Red/Green/Blue 维度
+
+
     print("➤ PDAL 裁剪…")
     pdal.Pipeline(json.dumps(pipeline)).execute()
     print("   生成:", ply_crop)
@@ -92,6 +101,22 @@ def main():
     # Open3D 法向估计
     print("➤ Open3D 估计法向 (k =", args.knn, ") …")
     pcd = o3d.io.read_point_cloud(ply_crop)
+
+    # 如果点云没有颜色信息，这里是空的
+    if not pcd.has_colors():
+        print("⚠️ 颜色信息丢失，将尝试从原始 ply 读取 RGB 手动恢复")
+        import numpy as np
+        import plyfile
+        from plyfile import PlyData
+
+        plydata = PlyData.read(ply_crop)
+        vertices = plydata['vertex'].data
+        r = vertices['red'] / 255.0
+        g = vertices['green'] / 255.0
+        b = vertices['blue'] / 255.0
+        rgb = np.vstack((r, g, b)).T
+        pcd.colors = o3d.utility.Vector3dVector(rgb)
+
     pcd.estimate_normals(
         search_param=o3d.geometry.KDTreeSearchParamKNN(knn=args.knn))
     pcd.orient_normals_consistent_tangent_plane(args.knn*5)
@@ -105,16 +130,29 @@ def main():
     # Ball Pivoting
     bbox = ms.current_mesh().bounding_box()
     diag = math.dist(bbox.min(), bbox.max())
-    radius = args.radius[0] if args.radius else diag * 0.01
-    ms.apply_filter(
-        'generate_surface_reconstruction_ball_pivoting',
-        ballradius=ml.PercentageValue(radius),
-        clustering=20.0,
-        creasethr=90.0,
-        deletefaces=True
-    )
 
-    # UV 展开与贴图
+    #radius = args.radius[0] if args.radius else diag * 0.01
+    #ms.apply_filter(
+    #    'generate_surface_reconstruction_ball_pivoting',
+    #    ballradius=ml.PercentageValue(radius),
+    #    clustering=20.0,
+    #    creasethr=90.0,
+    #    deletefaces=True
+    #)
+
+
+    first = True
+    for r in args.radius if args.radius else [diag * 0.01]:
+        ms.apply_filter(
+            'generate_surface_reconstruction_ball_pivoting',
+            ballradius=ml.PercentageValue(r),
+            clustering=20.0,
+            creasethr=90.0,
+            deletefaces=first
+        )
+    first = False
+
+    # UV 展开与贴图mtllib ./mesh_textured.obj.mtl
     ms.apply_filter(
         'compute_texcoord_parametrization_triangle_trivial_per_wedge',
         textdim=4096
@@ -128,7 +166,7 @@ def main():
     )
 
     # 导出 OBJ
-    ms.save_current_mesh(obj_path, save_vertex_color=False)
+    ms.save_current_mesh(obj_path, save_vertex_color=True)
     print("✓ 网格和贴图已导出 →", obj_path)
 
 if __name__ == "__main__":

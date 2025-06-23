@@ -1,6 +1,6 @@
-X_min -10
-X_max 10
-Y_min -15
-Y_max 5.862161
-Z_min -2.233422
-Z_max 8.233422
+X_min 30
+X_max 60
+Y_min -5
+Y_max 20
+Z_min -2
+Z_max 6
